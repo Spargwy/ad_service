@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <title>ads list</title>
+    </head>
+    <body>
+    <ul>
+        {% for ad in ads %}
+            {% if ad.top == True %}
+        <h2><mark>HOT PRICE {{ ad.hot_price }} <strike> {{ ad.price }}</strike></mark></h2>
+                <h4>Description: {{ ad.description }}</h4>
+        <h1>-------------</h1>
+            {% endif %}
+        {% endfor %}
+        {% for ad in ads %}
+            {% if ad.top != True %}
+                <h4>Description: {{ ad.description }}</h4>
+                <h4>Price: {{ ad.price }}</h4>
+                {% if ad.hot_price != None %}
+                    <h4>Hot price {{ ad.hot_price }}</h4>
+                {% endif %}
+            <h1>--------------</h1>
+            {% endif %}
+        {% endfor %}
+    </ul>
+    </body>
+</html>
