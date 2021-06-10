@@ -1,29 +1,43 @@
-import threading
-import time
+import os
 
+from asgiref.sync import sync_to_async
 from pyrogram import filters
-import dbworker
-from ad import Ad
-from storage import migrations, cur, con
-from flow_statuses import ad_text_status, ad_price_status, user_answer_about_hot_price, set_ad_hot_price
-from init import bot
-import config
+from asgiref.sync import async_to_sync
+
+from . import dbworker
+from .storage import con
+from .flow_statuses import ad_text_status, ad_price_status, user_answer_about_hot_price, set_ad_hot_price
+from .init import bot
+from . import config
 from pyrogram.types import ReplyKeyboardMarkup
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
+from ad_page.models import Ad
 
-migrations()
 user_ad = {}
 
 scheduler = AsyncIOScheduler()
 scheduler.start()
 
 
-async def delete_ads():
-    print("START")
-    req = "delete from ad"
-    cur.execute(req)
-    con.commit()
-    print("FINISH")
+@sync_to_async
+def update_ad(chat_id, **kwargs):
+    ad = Ad.objects.filter(chat_id=chat_id, is_published=False).first()
+    print(Ad.objects.filter(chat_id=chat_id).values('is_published'))
+    for field, value in kwargs.items():
+        setattr(ad, field, value)
+    ad.save()
+    return ad
+
+
+@sync_to_async
+def create_ad(chat_id):
+    return Ad.objects.create(chat_id=chat_id)
+
+
+@sync_to_async
+def delete_ads():
+    Ad.objects.filter().delete()
+
 
 scheduler.add_job(func=delete_ads, trigger='cron', minute=0)
 
@@ -49,15 +63,14 @@ async def start(_, message):
 
 @bot.on_message(filters.command('new ad'))
 async def new_ad(_, message):
-    ad = Ad()
-    user_ad[message.chat.id] = ad
+    await create_ad(message.chat.id)
     await bot.send_message(message.chat.id, "The first thing you need to do to create an ad is write your ad text.")
     dbworker.set_state(message.chat.id, config.States.S_AD_TEXT.value)
 
 
 @bot.on_message(ad_text_status)
 async def get_ad_text(_, message):
-    user_ad[message.chat.id].ad_text = message.text
+    await update_ad(message.chat.id, text=message.text)
     await bot.send_message(message.chat.id, "Great\nNow you should to write price for it")
     dbworker.set_state(message.chat.id, config.States.S_AD_PRICE.value)
 
@@ -66,7 +79,7 @@ async def get_ad_text(_, message):
 async def answer_user_about_hot_price(_, message):
     try:
         price = int(message.text)
-        user_ad[message.chat.id].price = price
+        await update_ad(message.chat.id, price=price)
     except Exception as e:
         print("Error in price value: ", e)
         await bot.send_message(message.chat.id, "Please, enter the number value")
@@ -115,11 +128,7 @@ async def handle_user_answer_about_hot_price(_, message):
                                    resize_keyboard=True
                                )
                                )
-        req = "INSERT INTO ad(user_id, ad_text, price) VALUES(%s, %s, %s)"
-        cur.execute(req, (message.chat.id,
-                          user_ad[message.chat.id].ad_text,
-                          user_ad[message.chat.id].price))
-        con.commit()
+        await update_ad(message.chat.id)(is_published=True)
         dbworker.set_state(message.chat.id, config.States.S_START.value)
     else:
         message_text = "please, choose the correct variant"
@@ -129,23 +138,10 @@ async def handle_user_answer_about_hot_price(_, message):
 @bot.on_message(set_ad_hot_price)
 async def set_hot_price_value(_, message):
     try:
-        hot_price = int(message.text)
-        user_ad[message.chat.id].hot_price = hot_price
+        await update_ad(message.chat.id, is_published=True, hot_price=int(message.text))
     except Exception as e:
         print("Error in price value: ", e)
         await bot.send_message(message.chat.id, "Please, enter the number value")
         return
-    req = "update ad set top = false where top = true"
-    cur.execute(req)
-    req = "insert into ad(user_id, ad_text, price, hot_price, top) values (%s, %s, %s, %s, %s)"
-    cur.execute(req,
-                (message.chat.id,
-                 user_ad[message.chat.id].ad_text,
-                 user_ad[message.chat.id].price,
-                 user_ad[message.chat.id].hot_price,
-                 True))
-    await bot.send_message(message.chat.id, "Your ad will be locate in our site")
-    con.commit()
-
-
-bot.run()
+    else:
+        await bot.send_message(message.chat.id, "Your ad will be locate in our site")

@@ -2,7 +2,7 @@ from vedis import Vedis
 
 
 # Пытаемся узнать из базы «состояние» пользователя
-import config
+from . import config
 
 
 def get_current_state(user_id):

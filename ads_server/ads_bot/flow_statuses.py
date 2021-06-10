@@ -1,8 +1,7 @@
 """Файл в котором прописаны различные статусы, которые будут присуждаться
 пользователю в процессе совершения каких-либо действий"""
 from pyrogram import filters
-import config
-import dbworker
+from . import config, dbworker
 
 
 # первый шаг для создания обьявления - текст
